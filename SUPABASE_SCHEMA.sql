@@ -29,6 +29,7 @@ create table if not exists public.categories (
   slug              text not null,
   attributes_schema jsonb not null default '[]'::jsonb,
   position          integer not null default 0,
+  archived_at       timestamptz,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
@@ -53,6 +54,7 @@ create table if not exists public.products (
   attributes   jsonb not null default '{}'::jsonb,
   image_urls   text[] not null default '{}',
   model_3d_url text,
+  archived_at  timestamptz,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
@@ -153,3 +155,47 @@ create policy "catalog_assets_auth_delete"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'catalog-assets');
+
+-- =============================================================================
+-- Archive indexes + site_settings (admin-managed home page).
+-- (Also delivered standalone as SUPABASE_MIGRATION_02.sql for existing DBs.)
+-- =============================================================================
+create index if not exists categories_archived_at_idx
+  on public.categories (archived_at);
+create index if not exists products_archived_at_idx
+  on public.products (archived_at);
+
+create table if not exists public.site_settings (
+  id                boolean primary key default true,
+  hero_eyebrow      text not null default 'Explore the collection',
+  hero_title        text not null default 'Everything, beautifully organised.',
+  hero_subtitle     text not null default 'Browse by category to discover products — complete with rich specs and interactive 3D previews.',
+  primary_cta_label text not null default 'Browse the catalog',
+  primary_cta_href  text not null default '/catalog',
+  featured_enabled  boolean not null default true,
+  updated_at        timestamptz not null default now(),
+  constraint site_settings_singleton check (id)
+);
+
+insert into public.site_settings (id) values (true)
+on conflict (id) do nothing;
+
+drop trigger if exists site_settings_set_updated_at on public.site_settings;
+create trigger site_settings_set_updated_at
+  before update on public.site_settings
+  for each row execute function public.set_updated_at();
+
+alter table public.site_settings enable row level security;
+
+drop policy if exists "site_settings_public_read" on public.site_settings;
+create policy "site_settings_public_read"
+  on public.site_settings for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "site_settings_auth_write" on public.site_settings;
+create policy "site_settings_auth_write"
+  on public.site_settings for all
+  to authenticated
+  using (true)
+  with check (true);

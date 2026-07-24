@@ -3,11 +3,11 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
-import { Box, ImageOff, Loader2, Plus, Trash2 } from "lucide-react";
+import { Archive, Box, ImageOff, Loader2, Pencil, Plus } from "lucide-react";
 
-import type { Category } from "@/lib/types";
+import type { Category, Product } from "@/lib/types";
 import { useProducts, productsQueryKey } from "@/hooks/use-products";
-import { deleteProduct } from "@/app/admin/product-actions";
+import { archiveProduct } from "@/app/admin/product-actions";
 import { ProductForm } from "@/components/admin/product-form";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 const priceFormatter = new Intl.NumberFormat(undefined, {
@@ -27,15 +26,31 @@ const priceFormatter = new Intl.NumberFormat(undefined, {
 
 export function ProductsPanel({ category }: { category: Category }) {
   const { data: products, isLoading, isError, error } = useProducts(category.id);
-  const [open, setOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
   const queryClient = useQueryClient();
 
-  async function handleDelete(id: string, title: string) {
-    if (!window.confirm(`Delete “${title}”? This cannot be undone.`)) return;
-    const res = await deleteProduct(id);
+  function openCreate() {
+    setEditing(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(product: Product) {
+    setEditing(product);
+    setFormOpen(true);
+  }
+
+  async function handleArchive(id: string, title: string) {
+    if (
+      !window.confirm(
+        `Archive “${title}”? You can restore it later from the Archive tab.`,
+      )
+    )
+      return;
+    const res = await archiveProduct(id);
     if (res.error) {
       toast.add({
-        title: "Couldn't delete",
+        title: "Couldn't archive",
         description: res.error,
         type: "error",
       });
@@ -44,7 +59,7 @@ export function ProductsPanel({ category }: { category: Category }) {
     await queryClient.invalidateQueries({
       queryKey: productsQueryKey(category.id),
     });
-    toast.add({ title: `Deleted “${title}”`, type: "success" });
+    toast.add({ title: `Archived “${title}”`, type: "success" });
   }
 
   return (
@@ -56,24 +71,9 @@ export function ProductsPanel({ category }: { category: Category }) {
             {products?.length ?? 0} in {category.name}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger
-            render={
-              <Button size="sm">
-                <Plus className="mr-1.5 size-4" /> Add product
-              </Button>
-            }
-          />
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>New product</DialogTitle>
-              <DialogDescription>
-                Fields adapt to the “{category.name}” attribute schema.
-              </DialogDescription>
-            </DialogHeader>
-            <ProductForm category={category} onCreated={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="mr-1.5 size-4" /> Add product
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -88,7 +88,7 @@ export function ProductsPanel({ category }: { category: Category }) {
         ) : !products || products.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
             <p>No products in this category yet.</p>
-            <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+            <Button size="sm" variant="outline" onClick={openCreate}>
               <Plus className="mr-1.5 size-4" /> Add the first product
             </Button>
           </div>
@@ -124,29 +124,61 @@ export function ProductsPanel({ category }: { category: Category }) {
                         <Box className="size-3" /> 3D
                       </span>
                     )}
-                    <button
-                      type="button"
-                      aria-label="Delete product"
-                      onClick={() => handleDelete(product.id, product.title)}
-                      className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground opacity-0 shadow transition-opacity hover:text-destructive group-hover:opacity-100"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        aria-label="Edit product"
+                        onClick={() => openEdit(product)}
+                        className="flex size-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow hover:text-foreground"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Archive product"
+                        onClick={() => handleArchive(product.id, product.title)}
+                        className="flex size-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow hover:text-destructive"
+                      >
+                        <Archive className="size-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex flex-1 flex-col gap-0.5 p-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(product)}
+                    className="flex flex-1 flex-col gap-0.5 p-2.5 text-left"
+                  >
                     <p className="truncate text-sm font-medium" title={product.title}>
                       {product.title}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {priceFormatter.format(product.base_price)}
                     </p>
-                  </div>
+                  </button>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* Create / edit dialog */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
+            <DialogDescription>
+              Fields adapt to the “{category.name}” attribute schema.
+            </DialogDescription>
+          </DialogHeader>
+          <ProductForm
+            key={editing?.id ?? "new"}
+            category={category}
+            product={editing}
+            onSaved={() => setFormOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

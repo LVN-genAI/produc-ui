@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { descendantIds } from "@/lib/catalog";
 import type { Category, SchemaField } from "@/lib/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Standard result envelope for every admin action. */
 type ActionResult<T> = { data: T; error?: never } | { data?: never; error: string };
@@ -90,9 +92,76 @@ export async function renameCategory(
   return { data: true };
 }
 
+/** Resolves the subtree category ids (root + all descendants). */
+async function subtreeIds(
+  supabase: SupabaseClient,
+  rootId: string,
+): Promise<string[]> {
+  const { data } = await supabase.from("categories").select("id, parent_id");
+  const rows = (data ?? []) as Category[];
+  return descendantIds(rows, rootId);
+}
+
 /**
- * Deletes a category. ON DELETE CASCADE removes descendant categories and their
- * products, so warn the user in the UI before calling this.
+ * Archives (soft-deletes) a category and its ENTIRE subtree — descendant
+ * categories and all their products — so the active tree stays consistent.
+ */
+export async function archiveCategory(
+  categoryId: string,
+): Promise<ActionResult<true>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "You must be signed in." };
+
+  const ids = await subtreeIds(supabase, categoryId);
+  const now = new Date().toISOString();
+
+  const { error: pErr } = await supabase
+    .from("products")
+    .update({ archived_at: now })
+    .in("category_id", ids);
+  if (pErr) return { error: pErr.message };
+
+  const { error } = await supabase
+    .from("categories")
+    .update({ archived_at: now })
+    .in("id", ids);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin");
+  revalidatePath("/catalog", "layout");
+  revalidatePath("/");
+  return { data: true };
+}
+
+/** Restores an archived category and its subtree back to active. */
+export async function restoreCategory(
+  categoryId: string,
+): Promise<ActionResult<true>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "You must be signed in." };
+
+  const ids = await subtreeIds(supabase, categoryId);
+
+  await supabase
+    .from("products")
+    .update({ archived_at: null })
+    .in("category_id", ids);
+
+  const { error } = await supabase
+    .from("categories")
+    .update({ archived_at: null })
+    .in("id", ids);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin");
+  revalidatePath("/catalog", "layout");
+  revalidatePath("/");
+  return { data: true };
+}
+
+/**
+ * PERMANENTLY deletes a category. ON DELETE CASCADE removes descendant
+ * categories and their products. Used from the Archive view.
  */
 export async function deleteCategory(
   categoryId: string,
@@ -107,6 +176,7 @@ export async function deleteCategory(
 
   if (error) return { error: error.message };
   revalidatePath("/admin");
+  revalidatePath("/catalog", "layout");
   return { data: true };
 }
 

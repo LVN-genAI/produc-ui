@@ -33,6 +33,7 @@ export default async function CatalogPage({ params }: CatalogPageProps) {
   const { data: categoryRows } = await supabase
     .from("categories")
     .select("*")
+    .is("archived_at", null)
     .order("position", { ascending: true });
   const categories = (categoryRows ?? []) as Category[];
 
@@ -50,6 +51,7 @@ export default async function CatalogPage({ params }: CatalogPageProps) {
     const { data: countRows } = await supabase
       .from("products")
       .select("category_id")
+      .is("archived_at", null)
       .in("category_id", subIds);
     for (const row of (countRows ?? []) as { category_id: string }[]) {
       productCounts.set(
@@ -77,6 +79,7 @@ export default async function CatalogPage({ params }: CatalogPageProps) {
       .from("products")
       .select("*")
       .in("category_id", ids)
+      .is("archived_at", null)
       .order("created_at", { ascending: false });
     products = (productRows ?? []) as Product[];
     schemaByCategory = Object.fromEntries(

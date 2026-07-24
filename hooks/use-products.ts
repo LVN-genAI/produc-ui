@@ -19,6 +19,7 @@ export function useProducts(categoryId: string | null) {
         .from("products")
         .select("*")
         .eq("category_id", categoryId as string)
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw new Error(error.message);

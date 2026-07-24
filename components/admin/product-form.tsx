@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, PackagePlus } from "lucide-react";
+import { Loader2, PackagePlus, Save } from "lucide-react";
 
-import type { Category, ProductAttributes } from "@/lib/types";
-import { createProduct } from "@/app/admin/product-actions";
+import type { Category, Product, ProductAttributes, SchemaField } from "@/lib/types";
+import { createProduct, updateProduct } from "@/app/admin/product-actions";
 import { productsQueryKey } from "@/hooks/use-products";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -22,16 +22,36 @@ export interface ProductFormValues {
   attributes: Record<string, string | number>;
 }
 
+function initialAttributes(
+  schema: SchemaField[],
+  product: Product | null,
+): Record<string, string | number> {
+  const attrs: Record<string, string | number> = {};
+  for (const field of schema) {
+    const value = product?.attributes?.[field.key];
+    attrs[field.key] = value === null || value === undefined ? "" : value;
+  }
+  return attrs;
+}
+
 export function ProductForm({
   category,
-  onCreated,
+  product = null,
+  onSaved,
 }: {
   category: Category;
-  onCreated: () => void;
+  /** Pass a product to edit; omit/null to create. */
+  product?: Product | null;
+  onSaved: () => void;
 }) {
+  const isEdit = product !== null;
   const queryClient = useQueryClient();
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>(
+    product?.image_urls ?? [],
+  );
+  const [modelUrl, setModelUrl] = useState<string | null>(
+    product?.model_3d_url ?? null,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const {
@@ -40,7 +60,11 @@ export function ProductForm({
     handleSubmit,
     formState: { errors },
   } = useForm<ProductFormValues>({
-    defaultValues: { title: "", base_price: "", attributes: {} },
+    defaultValues: {
+      title: product?.title ?? "",
+      base_price: product ? String(product.base_price) : "",
+      attributes: initialAttributes(category.attributes_schema, product),
+    },
   });
 
   async function onSubmit(values: ProductFormValues) {
@@ -59,19 +83,23 @@ export function ProductForm({
         field.type === "number" ? Number(raw) : String(raw);
     }
 
-    const res = await createProduct({
+    const payload = {
       categoryId: category.id,
       title: values.title,
       basePrice: Number(values.base_price),
       attributes,
       imageUrls,
       model3dUrl: modelUrl,
-    });
+    };
+
+    const res = isEdit
+      ? await updateProduct(product.id, payload)
+      : await createProduct(payload);
 
     setSubmitting(false);
     if (res.error || !res.data) {
       toast.add({
-        title: "Couldn't create product",
+        title: isEdit ? "Couldn't update product" : "Couldn't create product",
         description: res.error,
         type: "error",
       });
@@ -81,8 +109,13 @@ export function ProductForm({
     await queryClient.invalidateQueries({
       queryKey: productsQueryKey(category.id),
     });
-    toast.add({ title: `Added “${res.data.title}”`, type: "success" });
-    onCreated();
+    toast.add({
+      title: isEdit
+        ? `Updated “${res.data.title}”`
+        : `Added “${res.data.title}”`,
+      type: "success",
+    });
+    onSaved();
   }
 
   return (
@@ -157,10 +190,12 @@ export function ProductForm({
         <Button type="submit" disabled={submitting}>
           {submitting ? (
             <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : isEdit ? (
+            <Save className="mr-2 size-4" />
           ) : (
             <PackagePlus className="mr-2 size-4" />
           )}
-          Create product
+          {isEdit ? "Save changes" : "Create product"}
         </Button>
       </div>
     </form>

@@ -33,6 +33,8 @@ export interface Category {
   slug: string;
   attributes_schema: SchemaField[];
   position: number;
+  /** NULL = active; a timestamp = soft-deleted (archived). */
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,10 +51,30 @@ export interface Product {
   attributes: ProductAttributes;
   image_urls: string[];
   model_3d_url: string | null;
+  /** NULL = active; a timestamp = soft-deleted (archived). */
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-/** Payloads for inserts (id / timestamps are DB-generated). */
-export type CategoryInsert = Omit<Category, "id" | "created_at" | "updated_at">;
-export type ProductInsert = Omit<Product, "id" | "created_at" | "updated_at">;
+/** Single-row, admin-editable home page content. */
+export interface SiteSettings {
+  id: boolean;
+  hero_eyebrow: string;
+  hero_title: string;
+  hero_subtitle: string;
+  primary_cta_label: string;
+  primary_cta_href: string;
+  featured_enabled: boolean;
+  updated_at: string;
+}
+
+/** Payloads for inserts (id / timestamps / archive flag are DB-managed). */
+export type CategoryInsert = Omit<
+  Category,
+  "id" | "created_at" | "updated_at" | "archived_at"
+>;
+export type ProductInsert = Omit<
+  Product,
+  "id" | "created_at" | "updated_at" | "archived_at"
+>;

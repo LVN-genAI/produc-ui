@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 import { Tree, type NodeRendererProps } from "react-arborist";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   FolderPlus,
   Loader2,
+  Pencil,
   Plus,
-  Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -20,8 +21,8 @@ import { useResizeObserver } from "@/hooks/use-resize-observer";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import {
+  archiveCategory,
   createCategory,
-  deleteCategory,
   renameCategory,
 } from "@/app/admin/actions";
 
@@ -70,24 +71,24 @@ export function CategoryTree() {
     toast.add({ title: `Created “${res.data.name}”`, type: "success" });
   }
 
-  async function handleDelete(node: CategoryTreeNode) {
+  async function handleArchive(node: CategoryTreeNode) {
     const hasChildren = node.children.length > 0;
     const confirmed = window.confirm(
       hasChildren
-        ? `Delete “${node.name}” and ALL its subcategories and products? This cannot be undone.`
-        : `Delete “${node.name}”? This cannot be undone.`,
+        ? `Archive “${node.name}” and ALL its subcategories and products? You can restore it later from the Archive tab.`
+        : `Archive “${node.name}”? You can restore it later from the Archive tab.`,
     );
     if (!confirmed) return;
     setBusy(true);
-    const res = await deleteCategory(node.id);
+    const res = await archiveCategory(node.id);
     setBusy(false);
     if (res.error) {
-      toast.add({ title: "Couldn't delete", description: res.error, type: "error" });
+      toast.add({ title: "Couldn't archive", description: res.error, type: "error" });
       return;
     }
     await invalidate();
     if (activeId === node.id) setActiveId(null);
-    toast.add({ title: `Deleted “${node.name}”`, type: "success" });
+    toast.add({ title: `Archived “${node.name}”`, type: "success" });
   }
 
   async function handleRename(id: string, name: string) {
@@ -152,7 +153,7 @@ export function CategoryTree() {
                 <CategoryNode
                   {...props}
                   onAddChild={handleAddChild}
-                  onDelete={handleDelete}
+                  onArchive={handleArchive}
                 />
               )}
             </Tree>
@@ -165,7 +166,7 @@ export function CategoryTree() {
 
 interface CategoryNodeProps extends NodeRendererProps<CategoryTreeNode> {
   onAddChild: (node: CategoryTreeNode) => void;
-  onDelete: (node: CategoryTreeNode) => void;
+  onArchive: (node: CategoryTreeNode) => void;
 }
 
 function CategoryNode({
@@ -173,7 +174,7 @@ function CategoryNode({
   style,
   dragHandle,
   onAddChild,
-  onDelete,
+  onArchive,
 }: CategoryNodeProps) {
   const hasChildren = node.data.children.length > 0;
 
@@ -234,6 +235,18 @@ function CategoryNode({
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <button
           type="button"
+          aria-label="Rename category"
+          title="Rename"
+          onClick={(e) => {
+            e.stopPropagation();
+            node.edit();
+          }}
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          type="button"
           aria-label="Add subcategory"
           title="Add subcategory"
           onClick={(e) => {
@@ -246,15 +259,15 @@ function CategoryNode({
         </button>
         <button
           type="button"
-          aria-label="Delete category"
-          title="Delete category"
+          aria-label="Archive category"
+          title="Archive"
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(node.data);
+            onArchive(node.data);
           }}
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-destructive"
         >
-          <Trash2 className="size-3.5" />
+          <Archive className="size-3.5" />
         </button>
       </div>
     </div>
