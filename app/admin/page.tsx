@@ -1,10 +1,15 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { AdminWorkspace } from "@/components/admin/admin-workspace";
 import { SignOutButton } from "@/components/admin/sign-out-button";
 
 export const metadata = {
   title: "Admin · Catalog",
 };
+
+// Auth-gated, user-specific dashboard — render dynamically, never prerender.
+export const dynamic = "force-dynamic";
 
 export default function AdminPage() {
   return (
@@ -20,7 +25,15 @@ export default function AdminPage() {
         </div>
         <SignOutButton />
       </header>
-      <AdminWorkspace />
+      <Suspense
+        fallback={
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" /> Loading workspace…
+          </div>
+        }
+      >
+        <AdminWorkspace />
+      </Suspense>
     </div>
   );
 }
