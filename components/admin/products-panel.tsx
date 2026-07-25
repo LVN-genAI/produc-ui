@@ -124,7 +124,7 @@ export function ProductsPanel({ category }: { category: Category }) {
                         <Box className="size-3" /> 3D
                       </span>
                     )}
-                    <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                       <button
                         type="button"
                         aria-label="Edit product"

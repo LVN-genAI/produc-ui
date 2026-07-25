@@ -96,7 +96,7 @@ export function ImageDropzone({ value, onChange }: ImageDropzoneProps) {
                 type="button"
                 aria-label="Remove image"
                 onClick={() => handleRemove(url)}
-                className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 shadow transition-opacity group-hover:opacity-100"
+                className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-background/80 text-foreground opacity-100 shadow transition-opacity md:opacity-0 md:group-hover:opacity-100"
               >
                 <X className="size-3.5" />
               </button>
